@@ -1,0 +1,10 @@
+endpoints:
+  - name: chat
+    endpoint_type: llm/v1/chat
+    model:
+      provider: openai
+      name: google/gemma-3-12b
+      config:
+        openai_api_base: http://localhost:1234/v1
+        openai_api_key: dummy_key
+        temperature: 0.7

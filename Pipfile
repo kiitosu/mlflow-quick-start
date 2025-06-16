@@ -4,7 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-mlflow = "*"
 streamlit = "*"
 openai = "*"
 langchain-openai = "*"
@@ -14,6 +13,7 @@ transformers = "*"
 torch = "*"
 torchvision = "*"
 torchaudio = "*"
+mlflow = {extras = ["extras", "genai"], version = "*"}
 
 [dev-packages]
 
