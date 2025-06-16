@@ -92,8 +92,6 @@ with mlflow.start_run() as run:
         input_example=input_example,
     )
 
-    # MLflowエンドポイントのデプロイ情報を追加
-    set_deployments_target("http://localhost:5002")
     # デプロイ済みのエンドポイントを使って専門性を評価する
     my_professionalism_metrics = professionalism(model="endpoints:/chat")
 
