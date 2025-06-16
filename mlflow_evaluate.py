@@ -6,7 +6,8 @@ import pandas as pd  # type: ignore
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from mlflow.deployments import set_deployments_target
-from mlflow.metrics.genai import answer_similarity
+
+from professionalism_metrics import professionalism
 
 eval_data = pd.DataFrame(
     {
@@ -93,8 +94,8 @@ with mlflow.start_run() as run:
 
     # MLflowエンドポイントのデプロイ情報を追加
     set_deployments_target("http://localhost:5002")
-    # デプロイ済みのエンドポイントを使って類似度を計算する(推論するモデルと同じなので実質意味無し)
-    my_answer_similarity = answer_similarity(model="endpoints:/chat")
+    # デプロイ済みのエンドポイントを使って専門性を評価する
+    my_professionalism_metrics = professionalism(model="endpoints:/chat")
 
     # 事前定義された question-answering metrics を使って評価する
     results = mlflow.evaluate(
@@ -104,7 +105,7 @@ with mlflow.start_run() as run:
         model_type="question-answering",
         # LLM判定メトリクスを追加
         extra_metrics=[
-            my_answer_similarity,
+            my_professionalism_metrics,
         ],
     )
     print(f"See aggregated evaluation results below: \n{results.metrics}")
