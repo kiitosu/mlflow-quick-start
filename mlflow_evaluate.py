@@ -5,6 +5,8 @@ import mlflow.pyfunc
 import pandas as pd  # type: ignore
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from mlflow.deployments import set_deployments_target
+from mlflow.metrics.genai import answer_similarity
 
 eval_data = pd.DataFrame(
     {
@@ -31,6 +33,9 @@ eval_data = pd.DataFrame(
 # MLflowサーバーのURIを設定
 mlflow.set_tracking_uri("http://localhost:5001")
 mlflow.set_experiment("my-genai-experiment")
+
+# MLflow AI gatewayのターゲットを設定
+set_deployments_target("http://localhost:5002")
 
 # 既存のアクティブなrunがあれば終了
 if mlflow.active_run():
@@ -86,12 +91,21 @@ with mlflow.start_run() as run:
         input_example=input_example,
     )
 
+    # MLflowエンドポイントのデプロイ情報を追加
+    set_deployments_target("http://localhost:5002")
+    # デプロイ済みのエンドポイントを使って類似度を計算する(推論するモデルと同じなので実質意味無し)
+    my_answer_similarity = answer_similarity(model="endpoints:/chat")
+
     # 事前定義された question-answering metrics を使って評価する
     results = mlflow.evaluate(
         logged_model_info.model_uri,
         eval_data,
         targets="ground_truth",
         model_type="question-answering",
+        # LLM判定メトリクスを追加
+        extra_metrics=[
+            my_answer_similarity,
+        ],
     )
     print(f"See aggregated evaluation results below: \n{results.metrics}")
 
