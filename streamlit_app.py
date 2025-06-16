@@ -12,9 +12,9 @@ mlflow.set_experiment("my-genai-experiment")
 def generate_response(input_text):
     llm = ChatOpenAI(
         base_url="http://localhost:1234/v1",
-        api_key="not-needed",
+        api_key=None,
         temperature=0.7,
-        model_name="google/gemma-3-12b",
+        name="google/gemma-3-12b",
     )
     output = llm.invoke(input_text).content
     st.info(output)

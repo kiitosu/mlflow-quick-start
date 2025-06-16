@@ -8,6 +8,12 @@ mlflow = "*"
 streamlit = "*"
 openai = "*"
 langchain-openai = "*"
+textstat = "*"
+evaluate = "*"
+transformers = "*"
+torch = "*"
+torchvision = "*"
+torchaudio = "*"
 
 [dev-packages]
 
