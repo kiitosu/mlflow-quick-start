@@ -1,19 +1,25 @@
 import os
-import shutil  # for deleting temporary files
 import tempfile
+import warnings
 
 import mlflow
 import requests
 from bs4 import BeautifulSoup  # HTMLのパースに使う
+from langchain._api import LangChainDeprecationWarning
 from langchain.chains import RetrievalQA  # データベースからの検索に使う
-from langchain.document_loaders import TextLoader  # テキストファイルを読み込む
 from langchain.text_splitter import CharacterTextSplitter  # テキストを分割する
-from langchain.vectorstores import FAISS  # ベクトルデータベースを作る
-from langchain_openai import OpenAI, OpenAIEmbeddings  # OpenAI APIを使う
+from langchain_community.document_loaders import (
+    TextLoader,  # テキストファイルを読み込む
+)
+from langchain_community.vectorstores import FAISS  # ベクトルデータベースを作る
+from langchain_huggingface import HuggingFaceEmbeddings  # ローカル埋め込み用
+from langchain_openai import ChatOpenAI  # LM Studio用
 
-assert (
-    "OPENAI_API_KEY" in os.environ
-), "Please set the OPENAI_API_KEY environment variable."
+# LangChainの非推奨警告を抑制
+warnings.filterwarnings("ignore", category=LangChainDeprecationWarning)
+
+# HuggingFaceトークナイザーの並列処理警告を抑制
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def fetch_federal_document(url, div_class):  # noqa: D417
@@ -82,8 +88,11 @@ def create_faiss_database(
     )
     document_chunks = document_splitter.split_documents(raw_documents)
 
-    # Generate embeddings for each document chunk
-    embedding_generator = OpenAIEmbeddings()
+    # HuggingFace埋め込みモデルを使用
+    embedding_generator = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"},  # CPUを使用（GPUがある場合は'cuda'）
+    )
     faiss_database = FAISS.from_documents(document_chunks, embedding_generator)
 
     # Save the FAISS database to the specified directory
@@ -106,14 +115,28 @@ fetch_and_save_documents(url_listings, doc_path)
 
 vector_db = create_faiss_database(doc_path, persist_dir)
 
+# MLflowサーバーのURIを設定
+mlflow.set_tracking_uri("http://localhost:5001")
 mlflow.set_experiment("Legal RAG")
 
-retrievalQA = RetrievalQA.from_llm(llm=OpenAI(), retriever=vector_db.as_retriever())
+# LM StudioのGemmaを使用
+local_llm = ChatOpenAI(
+    base_url="http://localhost:1234/v1",
+    api_key=None,  # LM Studioなのでダミー値
+    temperature=0.7,
+    model="gemma",  # LM Studioで起動しているモデル名
+)
+
+retrievalQA = RetrievalQA.from_llm(llm=local_llm, retriever=vector_db.as_retriever())
 
 
 # Log the retrievalQA chain
 def load_retriever(persist_directory):
-    embeddings = OpenAIEmbeddings()
+    # 同じHuggingFace埋め込みモデルを使用
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"},
+    )
     vectorstore = FAISS.load_local(
         persist_directory,
         embeddings,
@@ -123,9 +146,75 @@ def load_retriever(persist_directory):
 
 
 with mlflow.start_run() as run:
+    # 依存関係を明示的に指定
+    # mlflow.utils.environment: Encountered an unexpected error while inferring pip requirements の警告を抑制するため
+    pip_requirements = [
+        "langchain==0.3.25",
+        "langchain-community",
+        "langchain-openai",
+        "langchain-huggingface",
+        "sentence-transformers",
+        "faiss-cpu",
+        "beautifulsoup4",
+        "requests",
+        "pydantic==2.11.7",
+        "cloudpickle==3.1.1",
+    ]
+
     model_info = mlflow.langchain.log_model(
         retrievalQA,
         name="retrieval_qa",
         loader_fn=load_retriever,
         persist_dir=persist_dir,
+        pip_requirements=pip_requirements,  # 明示的に指定
     )
+
+
+# チャットアプリから使えるように一連の作業を関数化する
+def create_retrieval_qa():
+    """
+    RetrievalQAチェーンを作成して返す
+
+    Returns:
+        RetrievalQA: 設定済みのRetrievalQAチェーン
+    """
+    # ドキュメントの取得と保存
+    temporary_directory = tempfile.mkdtemp()
+
+    local_doc_path = os.path.join(temporary_directory, "docs.txt")
+
+    fetch_and_save_documents(url_listings, local_doc_path)
+
+    # ドキュメントの読み込み
+    loader = TextLoader(local_doc_path, encoding="utf-8")
+    documents = loader.load()
+
+    # テキストの分割
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    docs = text_splitter.split_documents(documents)
+
+    # 埋め込みモデルの設定
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+    # ベクトルストアの作成
+    vectorstore = FAISS.from_documents(docs, embeddings)
+
+    # LLMの設定
+    llm = ChatOpenAI(
+        base_url="http://localhost:1234/v1",
+        api_key=None,
+        temperature=0.7,
+        model_name="google/gemma-3-12b",
+    )
+
+    # RetrievalQAチェーンの作成
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=vectorstore.as_retriever(),
+        return_source_documents=True,
+    )
+
+    return qa_chain

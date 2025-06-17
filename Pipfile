@@ -14,11 +14,13 @@ torchaudio = "*"
 mlflow = {extras = ["extras", "genai"], version = "*"}
 beautifulsoup4 = "*"
 langchain = "*"
-langchain-community = "*"
 langchain-openai = "*"
 openai = "*"
 tiktoken = "*"
 faiss-cpu = "*"
+sentence-transformers = "*"
+langchain-community = "*"
+langchain-huggingface = "*"
 
 [dev-packages]
 
