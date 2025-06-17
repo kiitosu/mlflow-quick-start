@@ -5,8 +5,6 @@ name = "pypi"
 
 [packages]
 streamlit = "*"
-openai = "*"
-langchain-openai = "*"
 textstat = "*"
 evaluate = "*"
 transformers = "*"
@@ -14,6 +12,13 @@ torch = "*"
 torchvision = "*"
 torchaudio = "*"
 mlflow = {extras = ["extras", "genai"], version = "*"}
+beautifulsoup4 = "*"
+langchain = "*"
+langchain-community = "*"
+langchain-openai = "*"
+openai = "*"
+tiktoken = "*"
+faiss-cpu = "*"
 
 [dev-packages]
 
